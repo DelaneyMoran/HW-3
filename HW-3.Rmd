@@ -1,6 +1,6 @@
 ---
 title: "MATH 216 Homework 3"
-author: "WRITE YOUR NAME HERE"
+author: "Delaney Moran"
 output: html_document
 ---
 
@@ -9,6 +9,7 @@ suppressPackageStartupMessages(library(ggplot2))
 suppressPackageStartupMessages(library(dplyr))
 suppressPackageStartupMessages(library(lubridate))
 suppressPackageStartupMessages(library(Quandl))
+suppressPackageStartupMessages(library(tidyr))
 ```
 
 
@@ -16,8 +17,8 @@ suppressPackageStartupMessages(library(Quandl))
 
 Please indicate
 
-* Who you collaborated with:
-* Roughly how much time you spent on this HW:
+* Who you collaborated with: Kyler, Christian
+* Roughly how much time you spent on this HW: 6 hours
 * What gave you the most trouble:
 * Any comments you have: 
 
@@ -38,9 +39,6 @@ jukebox <- read.csv("data/jukebox.csv", header=TRUE) %>%
 ```
 
 
-
-
-
 ## Question 1:
 
 For this question we will be picking up from where we left off in HW-2,
@@ -49,13 +47,31 @@ specifically the OkCupid dataset.
 
 ### a)
 
-Using your exploratory data analysis from HW-2, fit a logistic regression to
-predict individual's gender and interpret your results.
+Using your exploratory data analysis from HW-2, fit a logistic regression to predict individual's gender and interpret the results for one continuous variable (if you used one) and one categorical variable of your choice.
 
 ```{r, echo=FALSE, fig.width=12, fig.height=6}
+profiles <- mutate(profiles, is_female = ifelse(sex == "f", 1, 0))
+
+bodytype <- profiles %>% 
+  select(body_type, is_female) %>% 
+  group_by(body_type) %>% 
+  mutate(sum = sum(is_female),
+         prop_female = mean(is_female)) %>% 
+  distinct(body_type) %>% 
+  arrange(prop_female)
+  
+modeldata <- profiles %>% 
+  mutate(full_curvy = ifelse(body_type %in% c("curvy", "full figured"), 1, 0),
+         health_edu_cler = ifelse(job %in% c("medicine / health", "education / academia", "clerical / administrative"), 1, 0)) %>% 
+  na.omit(height)
+
+model1 <- glm(is_female ~ full_curvy + health_edu_cler + height, data = modeldata, family = binomial(link = "logit"))
+summary(model1)
 
 ```
+####Not sure I did this right...So if the respondent says s/he is curvy or full-figured there is a 356% increase in the likelihood s/he is female? Am I supposed to take i/e^3.56? 
 
+####Also is there a more attractive way to display this information?
 
 ### b)
 
@@ -63,6 +79,10 @@ Plot a histogram of the fitted probabilities $\widehat{p}_i$ for all users $i=1,
 \ldots, n=59946$ in your dataset.
 
 ```{r, echo=FALSE, fig.width=12, fig.height=6}
+
+#fitted values
+co <- coefficients(model1)
+hist(fitted(model1))
 
 ```
 
@@ -81,10 +101,19 @@ your table should be $n=59946$. Comment on how well our predictions fared.
 
 ```{r, echo=FALSE, fig.width=12, fig.height=6}
 
+threshold <- 0.5
+predicted_sex <- modeldata %>% 
+  mutate(predicted_fem = ifelse(fitted(model1) > threshold, 1, 0))
+
+table <- predicted_sex %>% 
+  group_by(is_female, predicted_fem) %>% 
+  tally()
+knitr::kable(head(table), format = "markdown")
+
 ```
+####As expected, there is more type 2 (more people predicted as men but who are actually female) due to the choice of predictor variables; they are highly associated with being female, but only apply to a small sub-set of people.
 
-
-### d)
+### d) BONUS
 
 Say we wanted to have a **false positive rate** of about 20%, i.e. of the people
 we predicted to be female, we want to be wrong no more than 20% of the time. What
@@ -111,10 +140,22 @@ What seasonal (i.e. cyclical) patterns do you observe?
 
 ```{r, echo=FALSE, fig.width=12, fig.height=6}
 
+jukebox1 <- jukebox %>% 
+  mutate(date_time2 = parse_date_time(date_time, "%a %b %d %H:%M:%S %Y"))
+
+jukebox2 <- jukebox1 %>%
+  mutate(year = year(date_time2),
+         month = month(date_time2),
+         day = day(date_time2),
+         week = week(date_time2)) %>% 
+  group_by(week, year) %>% 
+  tally()
+
+ggplot(jukebox2, aes(x = week, y = n, color = as.factor(year))) + 
+  geom_line() +
+  ylab("Number of songs played") 
+
 ```
-
-
-
 
 
 ## Question 3:
@@ -127,10 +168,25 @@ shift" during the academic year? Define
 
 ```{r, echo=FALSE, fig.width=12, fig.height=6}
 
+jukebox3 <- jukebox1 %>% 
+  mutate(year = year(date_time2), 
+         month = month(date_time2), 
+         day = day(date_time2),
+         hour = hour(date_time2), 
+         minute = minute(date_time2),
+         second = second(date_time2))
+
+graveyard <- jukebox3 %>% 
+  filter(hour < 8) %>%
+  filter(month >8 | month <6) %>% 
+  group_by(artist) %>% 
+  tally() %>% 
+  arrange(-n)
+
+knitr::kable(head(graveyard, 10), format = "markdown")    
+  
+
 ```
-
-
-
 
 
 ## Question 4:
@@ -146,13 +202,18 @@ insight to a foreign currency exchanger.
 
 ```{r, echo=FALSE, fig.width=12, fig.height=6}
 
+bitcoin <- Quandl("BAVERAGE/USD") %>% tbl_df()
+bitcoin <- rename(bitcoin, Avg = `24h Average`, Total.Volume = `Total Volume`)
+
+
+
 ```
 
+####Haven't gotten a chance to do this yet!
 
 
 
-
-## Question 5:
+## Question 5: OPTIONAL
 
 Using the data loaded from Quandl below, plot a time series using `geom_line()`
 comparing cheese and milk production in the US from 1930 to today. Comment on this.
