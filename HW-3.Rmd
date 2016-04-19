@@ -17,8 +17,8 @@ suppressPackageStartupMessages(library(tidyr))
 
 Please indicate
 
-* Who you collaborated with: Kyler, Christian
-* Roughly how much time you spent on this HW: 6 hours
+* Who you collaborated with: Kyler, Christian, Aminata
+* Roughly how much time you spent on this HW: 9 hours
 * What gave you the most trouble:
 * Any comments you have: 
 
@@ -66,12 +66,14 @@ modeldata <- profiles %>%
   na.omit(height)
 
 model1 <- glm(is_female ~ full_curvy + health_edu_cler + height, data = modeldata, family = binomial(link = "logit"))
-summary(model1)
+knitr::kable(summary(model1)$coef, digits=2)
 
 ```
-####Not sure I did this right...So if the respondent says s/he is curvy or full-figured there is a 356% increase in the likelihood s/he is female? Am I supposed to take i/e^3.56? 
 
-####Also is there a more attractive way to display this information?
+Being curvy or full-figured is associated with an increase of exp(3.56) in the odds of being female.
+Working in clerical, education, and healthcare is associated with an increase of exp(0.88) in the odds of being female.
+Every increase of an inch in height is associated with a decrease of exp(0.63) in the odds of being female.
+
 
 ### b)
 
@@ -106,12 +108,19 @@ predicted_sex <- modeldata %>%
   mutate(predicted_fem = ifelse(fitted(model1) > threshold, 1, 0))
 
 table <- predicted_sex %>% 
-  group_by(is_female, predicted_fem) %>% 
+  mutate(sex = ifelse(is_female == 0, "male", "female"),
+         predicted_sex = ifelse(predicted_fem == 0, "predicted male", "predicted female")) %>% 
+  group_by(sex, predicted_sex) %>% 
   tally()
-knitr::kable(head(table), format = "markdown")
+  
+table2 <- table %>%
+  spread(sex, n)
+
+knitr::kable(table2)
 
 ```
-####As expected, there is more type 2 (more people predicted as men but who are actually female) due to the choice of predictor variables; they are highly associated with being female, but only apply to a small sub-set of people.
+Approximately 85% of females were predicted correctly.
+
 
 ### d) BONUS
 
@@ -140,20 +149,26 @@ What seasonal (i.e. cyclical) patterns do you observe?
 
 ```{r, echo=FALSE, fig.width=12, fig.height=6}
 
-jukebox1 <- jukebox %>% 
+jukebox <- jukebox %>% 
   mutate(date_time2 = parse_date_time(date_time, "%a %b %d %H:%M:%S %Y"))
 
-jukebox2 <- jukebox1 %>%
-  mutate(year = year(date_time2),
-         month = month(date_time2),
+jukebox2 <- jukebox %>%
+  mutate(month = month(date_time2),
+        year = year(date_time2),
          day = day(date_time2),
          week = week(date_time2)) %>% 
-  group_by(week, year) %>% 
+  group_by(year, week) %>% 
   tally()
 
 ggplot(jukebox2, aes(x = week, y = n, color = as.factor(year))) + 
   geom_line() +
   ylab("Number of songs played") 
+
+ggplot(jukebox2, aes(x = week, y = n)) +
+  geom_line() +
+  facet_wrap(~year, ncol = 7) +
+  ylab("Number of songs played") +
+  geom_smooth(se = 0)
 
 ```
 
@@ -168,7 +183,7 @@ shift" during the academic year? Define
 
 ```{r, echo=FALSE, fig.width=12, fig.height=6}
 
-jukebox3 <- jukebox1 %>% 
+jukebox4 <- jukebox %>% 
   mutate(year = year(date_time2), 
          month = month(date_time2), 
          day = day(date_time2),
@@ -176,7 +191,7 @@ jukebox3 <- jukebox1 %>%
          minute = minute(date_time2),
          second = second(date_time2))
 
-graveyard <- jukebox3 %>% 
+graveyard <- jukebox4 %>% 
   filter(hour < 8) %>%
   filter(month >8 | month <6) %>% 
   group_by(artist) %>% 
@@ -203,13 +218,28 @@ insight to a foreign currency exchanger.
 ```{r, echo=FALSE, fig.width=12, fig.height=6}
 
 bitcoin <- Quandl("BAVERAGE/USD") %>% tbl_df()
-bitcoin <- rename(bitcoin, Avg = `24h Average`, Total.Volume = `Total Volume`)
+bitcoin <- rename(bitcoin, bc_Avg = `24h Average`) %>% 
+  select(Date, bc_Avg) %>% 
+  mutate(bc_prev_day = lag(bc_Avg),
+         bc_percent_change = 100*((bc_Avg - bc_prev_day)/bc_prev_day))
 
 
+gold <- Quandl("WGC/GOLD_DAILY_USD") %>% tbl_df()
+gold <- rename(gold, gold_val = Value) %>% 
+  mutate(gold_prev_day = lag(gold_val),
+         gold_percent_change = 100*((gold_val - gold_prev_day)/gold_prev_day))
+
+gold_bc <- inner_join(gold, bitcoin, by = "Date")
+
+ggplot(gold_bc) +
+  geom_line(aes(Date, bc_percent_change), na.rm = TRUE) +
+  geom_line(aes(Date, gold_percent_change), na.rm = TRUE, color = "gold") +
+  ylab("Percent Change") +
+  ggtitle("Bitcoin and Gold Price Volatility 2010-present")
 
 ```
 
-####Haven't gotten a chance to do this yet!
+Percent change by day of bitcoin prices is shown in black and percent change in gold prices is shown in gold. Note that bitcoin prices are much more volatile.
 
 
 
